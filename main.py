@@ -1,5 +1,8 @@
 """nmap automation CLI: run a scan, save the result, and show a terminal report."""
 import argparse
+import os
+
+from intel.storage.ioc_store import init_db as init_threat_intel_db
 
 from netscan.dashboard.cli_diff import render as render_diff
 from netscan.dashboard.cli_report import render
@@ -10,7 +13,6 @@ from netscan.runner.nmap_runner import run_scan
 from netscan.storage.scan_store import list_scans, load_scan, save_scan
 
 DEFAULT_SCAN_DIR = "scans"
-COMPARE_RULES = [NewOpenPortRule(), NewServiceVersionRule()]
 
 
 def cmd_scan(args):
@@ -29,8 +31,18 @@ def cmd_compare(args):
 
     baseline = load_scan(paths[-2])
     current = load_scan(paths[-1])
-    findings = [finding for rule in COMPARE_RULES for finding in rule.compare(baseline, current)]
-    render_diff(findings, baseline=baseline, current=current)
+
+    # Only touch the threat-intel store if the integration is actually
+    # configured — otherwise this would silently create an empty data/iocs.db
+    # in whatever directory the CLI happens to run from.
+    threat_intel_conn = init_threat_intel_db() if os.environ.get("THREAT_INTEL_DB") else None
+    try:
+        rules = [NewOpenPortRule(threat_intel_conn=threat_intel_conn), NewServiceVersionRule()]
+        findings = [finding for rule in rules for finding in rule.compare(baseline, current)]
+        render_diff(findings, baseline=baseline, current=current)
+    finally:
+        if threat_intel_conn is not None:
+            threat_intel_conn.close()
 
 
 def main():

@@ -35,13 +35,41 @@ traceback.
 
 ## Rules
 
-- `new_open_port` (MEDIUM) — a port that was closed in the baseline scan is
-  open in the current one
+- `new_open_port` (MEDIUM, or HIGH — see Threat intel enrichment below) — a
+  port that was closed in the baseline scan is open in the current one
 - `new_service_version` (LOW) — the service name is unchanged but the
   detected version differs between scans
 
 A change in service name itself (e.g. http → rtsp on the same port) is treated
 as a separate case, not a version change.
+
+## Threat intel enrichment
+
+`new_open_port` can optionally cross-check the host's IP against a local IOC
+database built by the sibling [threat-intel-aggregator](../threat-intel-aggregator)
+project (abuse.ch URLhaus/ThreatFox feeds). If the IP is a known-bad IOC, the
+finding's severity escalates from `medium` to `high`. This is an
+editable-install dependency, not a copy-pasted function — both projects stay
+independent repos.
+
+Setup (system Python here is externally managed, so a venv is required):
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Point `new_open_port` at the other project's SQLite store via the
+`THREAT_INTEL_DB` environment variable:
+
+```bash
+export THREAT_INTEL_DB=/absolute/path/to/threat-intel-aggregator/data/iocs.db
+python main.py compare 192.168.122.1
+```
+
+If `THREAT_INTEL_DB` is unset, `new_open_port` never opens a threat-intel
+connection at all — it works exactly as before, findings just stay `medium`.
 
 ## Project structure
 
@@ -58,8 +86,11 @@ as a separate case, not a version change.
 python -m unittest discover -s tests -v
 ```
 
-18 tests, covering the parser, runner (mocked subprocess calls), storage,
-rules, and both CLI commands.
+25 tests, covering the parser, runner (mocked subprocess calls), storage,
+rules (including threat-intel severity escalation), and both CLI commands.
+The threat-intel tests use an in-memory threat-intel-aggregator store, so
+`python -m unittest discover -s tests` works whether or not `THREAT_INTEL_DB`
+is set.
 
 ## Notes
 

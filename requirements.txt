@@ -1,0 +1,10 @@
+# Standard library only, plus one local dependency for threat-intel enrichment.
+#
+# threat-intel-aggregator (sibling project) is installed in editable mode so
+# new_open_port.py can call its check_ip() directly. Requires a venv, since the
+# system Python here is externally managed (PEP 668):
+#
+#   python -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements.txt
+-e ../threat-intel-aggregator
